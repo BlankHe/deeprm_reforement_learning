@@ -1,0 +1,6 @@
+model_checkpoint_path: "tmp_130.ckpt"
+all_model_checkpoint_paths: "tmp_90.ckpt"
+all_model_checkpoint_paths: "tmp_100.ckpt"
+all_model_checkpoint_paths: "tmp_110.ckpt"
+all_model_checkpoint_paths: "tmp_120.ckpt"
+all_model_checkpoint_paths: "tmp_130.ckpt"

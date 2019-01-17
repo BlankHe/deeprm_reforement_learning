@@ -13,7 +13,7 @@ class Env:
         self.pa = pa
         self.render = render
         self.repre = repre  # image or compact representation
-        self.end = end  # termination type, 'no_new_job' or 'all_done'
+        self.end = end  # termination type, 'no_new_job' or 'all_done
 
         self.nw_dist = pa.dist.bi_model_dist
 
@@ -38,7 +38,7 @@ class Env:
                     float(len(self.nw_len_seqs))
                 print("Load on # " + str(i) + " resource dimension is " + str(self.workload[i]))
             self.nw_len_seqs = np.reshape(self.nw_len_seqs,
-                                           [self.pa.num_ex, self.pa.simu_len])
+                                          [self.pa.num_ex, self.pa.simu_len])
             self.nw_size_seqs = np.reshape(self.nw_size_seqs,
                                            [self.pa.num_ex, self.pa.simu_len, self.pa.num_res])
         else:
@@ -97,10 +97,10 @@ class Env:
                     ir_pt += self.pa.max_job_size
 
             image_repr[: int(self.job_backlog.curr_size / backlog_width),
-                       ir_pt: ir_pt + backlog_width] = 1
+            ir_pt: ir_pt + backlog_width] = 1
             if self.job_backlog.curr_size % backlog_width > 0:
                 image_repr[int(self.job_backlog.curr_size / backlog_width),
-                           ir_pt: ir_pt + self.job_backlog.curr_size % backlog_width] = 1
+                ir_pt: ir_pt + self.job_backlog.curr_size % backlog_width] = 1
             ir_pt += backlog_width
 
             image_repr[:, ir_pt: ir_pt + 1] = self.extra_info.time_since_last_new_job / \
@@ -110,7 +110,7 @@ class Env:
             assert ir_pt == image_repr.shape[1]
 
             return image_repr.ravel()[np.newaxis, :]
-            #return image_repr
+            # return image_repr
 
     def plot_state(self):
         plt.figure("screen", figsize=(20, 5))
@@ -133,7 +133,8 @@ class Env:
 
                 plt.subplot(self.pa.num_res,
                             1 + self.pa.num_nw + 1,  # first +1 for current work, last +1 for backlog queue
-                            1 + i * (self.pa.num_nw + 1) + j + skip_row + 1)  # plot the backlog at the end, +1 to avoid 0
+                            1 + i * (
+                                        self.pa.num_nw + 1) + j + skip_row + 1)  # plot the backlog at the end, +1 to avoid 0
 
                 plt.imshow(job_slot, interpolation='nearest', vmax=1)
 
@@ -144,8 +145,8 @@ class Env:
         backlog_width = int(math.ceil(self.pa.backlog_size / float(self.pa.time_horizon)))
         backlog = np.zeros((self.pa.time_horizon, backlog_width))
 
-        backlog[: self.job_backlog.curr_size / backlog_width, : backlog_width] = 1
-        backlog[self.job_backlog.curr_size / backlog_width, : self.job_backlog.curr_size % backlog_width] = 1
+        backlog[: int(self.job_backlog.curr_size / backlog_width), : backlog_width] = 1
+        backlog[int(self.job_backlog.curr_size / backlog_width), : self.job_backlog.curr_size % backlog_width] = 1
 
         plt.subplot(self.pa.num_res,
                     1 + self.pa.num_nw + 1,  # first +1 for current work, last +1 for backlog queue
@@ -163,8 +164,8 @@ class Env:
 
         plt.imshow(extra_info, interpolation='nearest', vmax=1)
 
-        plt.show()     # manual
-        # plt.pause(0.01)  # automatic
+        # plt.show()     # manual
+        plt.pause(0.01)  # automatic
 
     def get_reward(self):
 
@@ -190,15 +191,17 @@ class Env:
         reward = 0
         info = None
 
-        if a == self.pa.num_nw:  # explicit void action
+        # 改成无论如何都进行move on，然后动作需要写一个循环，对每个机器的每个动作都进行状态改变
+        # 先时间走一格(可以同时进行)，再进行任务分配（分别进行）
+        if a == self.pa.num_nw:  # explicit void action改成：如果选择了预览区则表示等待
             status = 'MoveOn'
         elif self.job_slot.slot[a] is None:  # implicit void action
-            #if self.seq_idx >= self.pa.simu_len and \
-                    #len(self.machine.running_job) > 0 and \
-                    #all(s is None for s in self.job_backlog.backlog):
-                #ob, reward, done, info = self.step(a + 1, repeat=True)
-                #return ob, reward, done, info
-            #else:
+            # if self.seq_idx >= self.pa.simu_len and \
+            # len(self.machine.running_job) > 0 and \
+            # all(s is None for s in self.job_backlog.backlog):
+            # ob, reward, done, info = self.step(a + 1, repeat=True)
+            # return ob, reward, done, info
+            # else:
             status = 'MoveOn'
         else:
             allocated = self.machine.allocate_job(self.job_slot.slot[a], self.curr_time)
@@ -208,20 +211,20 @@ class Env:
                 status = 'Allocate'
 
         if status == 'MoveOn':
-            self.curr_time += 1
+            self.curr_time += 1  # 关键操作，进行t+1
             self.machine.time_proceed(self.curr_time)
-            self.extra_info.time_proceed()
+            self.extra_info.time_proceed()  # 把无新任务到达的时间参数time_since_last_new_job+1
 
             if self.end == "no_new_job":  # end of new job sequence
                 if self.seq_idx >= self.pa.simu_len:
                     done = True
             elif self.end == "all_done":  # everything has to be finished
                 if self.seq_idx >= self.pa.simu_len and \
-                   len(self.machine.running_job) == 0 and \
-                   all(s is None for s in self.job_slot.slot) and \
-                   all(s is None for s in self.job_backlog.backlog):
+                        len(self.machine.running_job) == 0 and \
+                        all(s is None for s in self.job_slot.slot) and \
+                        all(s is None for s in self.job_backlog.backlog):
                     done = True
-                elif self.curr_time > self.pa.episode_max_length:  # run too long, force termination
+                elif self.curr_time > self.pa.episode_max_length:  # run too long, force termination强制结束
                     done = True
 
             if not done:
@@ -248,7 +251,7 @@ class Env:
                                 print("Backlog is full.")
                                 # exit(1)
 
-                        self.extra_info.new_job_comes()
+                        self.extra_info.new_job_comes()  # 把无新任务到达的时间参数time_since_last_new_job置0
 
             reward = self.get_reward()
 
@@ -277,7 +280,7 @@ class Env:
                 self.seq_no = (self.seq_no + 1) % self.pa.num_ex
 
             self.reset()
-        
+
         if self.render:
             self.plot_state()
 
@@ -327,7 +330,7 @@ class Machine:
         self.time_horizon = pa.time_horizon
         self.res_slot = pa.res_slot
 
-        self.avbl_slot = np.ones((self.time_horizon, self.num_res)) * self.res_slot
+        self.avbl_slot = np.ones((self.time_horizon, self.num_res)) * self.res_slot  # （显示时间长度×机器数）×资源宽度，在job shop问题里面设1
 
         self.running_job = []
 
@@ -339,6 +342,7 @@ class Machine:
         self.canvas = np.zeros((pa.num_res, pa.time_horizon, pa.res_slot))
 
     def allocate_job(self, job, curr_time):
+        # 分配任务
 
         allocated = False
 
@@ -378,7 +382,7 @@ class Machine:
 
                 break
 
-        return allocated
+        return allocated  # 返回是否成功分配任务的标志
 
     def time_proceed(self, curr_time):
 
@@ -466,7 +470,6 @@ def test_backlog():
 
 
 def test_compact_speed():
-
     pa = parameters.Parameters()
     pa.simu_len = 50
     pa.num_ex = 10
@@ -487,7 +490,6 @@ def test_compact_speed():
 
 
 def test_image_speed():
-
     pa = parameters.Parameters()
     pa.simu_len = 50
     pa.num_ex = 10

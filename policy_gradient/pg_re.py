@@ -57,12 +57,12 @@ def get_traj(agent, env, episode_max_length):
     for _ in range(episode_max_length):
 
         loss = 0
-        a = agent.choose_action(ob)
+        a = agent.choose_action(ob)  # choose action by the current state
 
         obs.append(ob)  # store the ob at current decision making step
-        acts.append(a)
+        acts.append(a)  # store the action
 
-        ob_, rew, done, info = env.step(a, repeat=True)
+        ob_, rew, done, info = env.step(a, repeat=True)  # the ob changed by the action, also get the reward
 
         # agent.store_transition(ob, a, rew)
 
@@ -156,7 +156,7 @@ def get_traj_worker(rl, env, pa):
 
     trajs = []
 
-    for i in range(pa.num_seq_per_batch):
+    for i in range(pa.num_seq_per_batch):# 跑完batch个序列，但是是一个个跑的
         traj = get_traj(rl, env, pa.episode_max_length)
         trajs.append(traj)
 
@@ -195,7 +195,7 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
 
     pg_learners = []
     envs = []
-
+    # 任务初始化，得到时长数组和占用资源宽度的数组
     nw_len_seqs, nw_size_seqs = job_distribution.generate_sequence_work(pa, seed=42)
 
     for ex in range(pa.num_ex):
@@ -203,8 +203,8 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
         print("-prepare for env-", ex)
 
         env = environment.Env(pa, nw_len_seqs=nw_len_seqs, nw_size_seqs=nw_size_seqs,
-                              render=False, repre=repre, end=end)
-        env.seq_no = ex
+                              render=render, repre=repre, end=end)
+        env.seq_no = ex  # env对象编号
         envs.append(env)
 
     print("-prepare for worker-")
@@ -233,7 +233,7 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
     print("Preparing for reference data...")
     # --------------------------------------
 
-    ref_discount_rews, ref_slow_down = slow_down_cdf.launch(pa, pg_resume=None, render=False,
+    ref_discount_rews, ref_slow_down = slow_down_cdf.launch(pa, pg_resume=None, render=render,
                                                             plot=False, repre=repre, end=end)
     mean_rew_lr_curve = []
     max_rew_lr_curve = []
@@ -262,9 +262,7 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
 
         ex_counter = 0
         for ex in range(pa.num_ex):
-
             ex_idx = ex_indices[ex]
-
             eprew, eplen, slowdown, all_ob, all_action, all_adv = get_traj_worker(rl, envs[ex_idx], pa)
             eprewlist.append(eprew)
             eplenlist.append(eplen)
