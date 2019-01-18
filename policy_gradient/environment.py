@@ -56,6 +56,7 @@ class Env:
         self.extra_info = ExtraInfo(pa)
 
     def generate_sequence_work(self, simu_len):
+        # 这个函数不再需要，在考虑随机派单的时候再用
 
         nw_len_seq = np.zeros(simu_len, dtype=int)
         nw_size_seq = np.zeros((simu_len, self.pa.num_res), dtype=int)
@@ -76,6 +77,7 @@ class Env:
         return new_job
 
     def observe(self):
+        # 这个位置需要改动，返回的observe,即状态，形状的改变不大但是
         if self.repre == 'image':
 
             backlog_width = int(math.ceil(self.pa.backlog_size / float(self.pa.time_horizon)))
@@ -134,7 +136,7 @@ class Env:
                 plt.subplot(self.pa.num_res,
                             1 + self.pa.num_nw + 1,  # first +1 for current work, last +1 for backlog queue
                             1 + i * (
-                                        self.pa.num_nw + 1) + j + skip_row + 1)  # plot the backlog at the end, +1 to avoid 0
+                                    self.pa.num_nw + 1) + j + skip_row + 1)  # plot the backlog at the end, +1 to avoid 0
 
                 plt.imshow(job_slot, interpolation='nearest', vmax=1)
 
@@ -291,48 +293,77 @@ class Env:
         self.curr_time = 0
 
         # initialize system
-        self.machine = Machine(self.pa)
-        self.job_slot = JobSlot(self.pa)
-        self.job_backlog = JobBacklog(self.pa)
-        self.job_record = JobRecord()
-        self.extra_info = ExtraInfo(self.pa)
+        self.machine = Machine(self.pa)  # 加工进程区
+        self.job_slot = JobSlot(self.pa)  # 等待区
+        self.job_backlog = JobBacklog(self.pa)  # 堆积区对象
+        self.job_record = JobRecord()  # 一个列表，里面装着一个个的job对象
+        self.extra_info = ExtraInfo(self.pa)  # 记录多久没有新任务被排进进程了，这个和最后的reward挂钩
 
 
 class Job:
     def __init__(self, res_vec, job_len, job_id, enter_time):
-        self.id = job_id
+        self.id = job_id #这个参数需要改动，因为初始化任务的时候并没有这个参数，只有触发了
         self.res_vec = res_vec
         self.len = job_len
         self.enter_time = enter_time
         self.start_time = -1  # not being allocated
         self.finish_time = -1
+    #def give_job_id(self,job_id):
+        #self.id = job_id
+
+
+
+
+class AllJobs:
+    def __init__(self, machine_table, time_table):
+        self.machine_table = machine_table
+        self.time_table = time_table
+    def initialize_all_jobs(self):
+
+
+
+
+
+
+
+
+
+
+
+class JobsOfMachine:
+    def __init__(self, machine_num):
+        self.machine_num = machine_num
+
+
+
+
 
 
 class JobSlot:
     def __init__(self, pa):
-        self.slot = [None] * pa.num_nw
+        self.slot = [None] * pa.num_nw  # 这是建立等待区的对象，需要改动:数量需要乘以机器数
 
 
 class JobBacklog:
     def __init__(self, pa):
-        self.backlog = [None] * pa.backlog_size
+        self.backlog = [None] * pa.backlog_size  # 这是建立堆积区的对象，需要改动:数量需要乘以机器数
         self.curr_size = 0
 
 
 class JobRecord:
     def __init__(self):
-        self.record = {}
+        self.record = {}  # 这是记录加工工件的记录。
 
 
 class Machine:
     def __init__(self, pa):
         self.num_res = pa.num_res
         self.time_horizon = pa.time_horizon
-        self.res_slot = pa.res_slot
+        self.res_slot = pa.res_slot  # 资源宽度
 
         self.avbl_slot = np.ones((self.time_horizon, self.num_res)) * self.res_slot  # （显示时间长度×机器数）×资源宽度，在job shop问题里面设1
 
-        self.running_job = []
+        self.running_job = []  # 正在运行的任务
 
         # colormap for graphical representation
         self.colormap = np.arange(1 / float(pa.job_num_cap), 1, 1 / float(pa.job_num_cap))
