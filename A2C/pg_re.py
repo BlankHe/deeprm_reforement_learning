@@ -6,6 +6,8 @@ import environment
 import job_distribution
 import slow_down_cdf
 import actor_critic_brain
+import parameters
+
 
 
 def init_accums(pg_learner):  # in rmsprop
@@ -294,7 +296,6 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
 
 def main():
 
-    import parameters
 
     pa = parameters.Parameters()
 

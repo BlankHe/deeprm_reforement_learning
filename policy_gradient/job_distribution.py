@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 
 class Dist:
@@ -27,15 +28,11 @@ class Dist:
         # new work duration
         nw_len = np.random.randint(1, self.job_len + 1)  # same length in every dimension
 
-        nw_size = np.zeros(self.num_res)
-
-        for i in range(self.num_res):
-            nw_size[i] = np.random.randint(1, self.max_nw_size + 1)
-
-        return nw_len, nw_size
+        return nw_len
 
     def bi_model_dist(self):
 
+        # 生成sequence中间的一个task也就是一个单工序任务
         # -- job length --
         if np.random.rand() < self.job_small_chance:  # small job
             nw_len = np.random.randint(self.job_len_small_lower,
@@ -43,42 +40,53 @@ class Dist:
         else:  # big job
             nw_len = np.random.randint(self.job_len_big_lower,
                                        self.job_len_big_upper + 1)
-
-        nw_size = np.zeros(self.num_res)
-
-        # -- job resource request --
-        dominant_res = np.random.randint(0, self.num_res)
-        for i in range(self.num_res):
-            if i == dominant_res:
-                nw_size[i] = np.random.randint(self.dominant_res_lower,
-                                               self.dominant_res_upper + 1)
-            else:
-                nw_size[i] = np.random.randint(self.other_res_lower,
-                                               self.other_res_upper + 1)
-
-        return nw_len, nw_size
+        return nw_len
 
 
 def generate_sequence_work(pa, seed=42):
-
     np.random.seed(seed)
 
-    simu_len = pa.simu_len * pa.num_ex
+    nw_time_table = []
+    nw_mach_table = []
 
-    nw_dist = pa.dist.bi_model_dist
+    for i in range(pa.num_ex):
+        time_table = np.zeros([pa.simu_len * pa.num_res], dtype=int)
 
-    nw_len_seq = np.zeros(simu_len, dtype=int)
-    nw_size_seq = np.zeros((simu_len, pa.num_res), dtype=int)
+        mach_table = [i for i in range(pa.num_res)] * pa.simu_len
 
-    for i in range(simu_len):
+        for j in range(pa.num_res * pa.simu_len):
+            time_table[j] = pa.dist.bi_model_dist()
 
-        if np.random.rand() < pa.new_job_rate:  # a new job comes
+        time_table = np.reshape(time_table, [pa.simu_len, pa.num_res])
+        mach_table = np.reshape(mach_table, [pa.simu_len, pa.num_res])
 
-            nw_len_seq[i], nw_size_seq[i, :] = nw_dist()
+        for mach_list in mach_table:
+            np.random.shuffle(mach_list)
 
-    nw_len_seq = np.reshape(nw_len_seq,
-                            [pa.num_ex, pa.simu_len])
-    nw_size_seq = np.reshape(nw_size_seq,
-                             [pa.num_ex, pa.simu_len, pa.num_res])
+        nw_time_table.append(time_table)
+        nw_mach_table.append(mach_table)
 
-    return nw_len_seq, nw_size_seq
+    return nw_mach_table, nw_time_table
+
+
+def read_excel_instance(machine_num, job_num):
+    file = 'data/JSP' + str(machine_num) + '_' + str(job_num) + '.xlsx'
+    sheet = pd.read_excel(io=file, header=0, sheet_name=[0, 1])
+
+    time_sheet = np.asarray(sheet[0])
+    all_time_table = np.reshape(time_sheet, [-1, job_num, machine_num])
+
+    mach_sheet = np.asarray(sheet[1])
+    all_mach_table = np.reshape(mach_sheet, [-1, job_num, machine_num])
+
+    return all_mach_table-1, all_time_table
+
+
+def main():
+    a, b = read_excel_instance(machine_num=15, job_num=15)
+    print(a)
+    print(b)
+
+
+if __name__ == '__main__':
+    main()

@@ -5,7 +5,7 @@ import environment
 import job_distribution
 import slow_down_cdf
 import RL_brain
-
+import math
 
 
 def init_accums(pg_learner):  # in rmsprop
@@ -18,7 +18,6 @@ def init_accums(pg_learner):  # in rmsprop
 
 
 def rmsprop_updates_outside(grads, params, accums, stepsize, rho=0.9, epsilon=1e-9):
-
     assert len(grads) == len(params)
     assert len(grads) == len(accums)
     for dim in range(len(grads)):
@@ -33,15 +32,15 @@ def discount(x, gamma):
     """
     out = np.zeros(len(x))
     out[-1] = x[-1]
-    for i in reversed(range(len(x)-1)):
-        out[i] = x[i] + gamma*out[i+1]
+    for i in reversed(range(len(x) - 1)):
+        out[i] = x[i] + gamma * out[i + 1]
     assert x.ndim >= 1
     # More efficient version:
     # scipy.signal.lfilter([1],[1,-gamma],x[::-1], axis=0)[::-1]
     return out
 
 
-def get_traj(agent, env, episode_max_length):
+def get_traj(agent, env):
     """
     Run agent-environment loop for one whole episode (trajectory)
     Return dictionary of results
@@ -54,22 +53,22 @@ def get_traj(agent, env, episode_max_length):
 
     ob = env.observe()
 
-    for _ in range(episode_max_length):
+    while True:
 
         loss = 0
-        a = agent.choose_action(ob)  # choose action by the current state
+        a = agent.choose_action(ob)
 
-        obs.append(ob)  # store the ob at current decision making step
-        acts.append(a)  # store the action
 
-        ob_, rew, done, info = env.step(a, repeat=True)  # the ob changed by the action, also get the reward
+
+        validity, ob_, rew, done, info = env.step(a, repeat=True)
 
         # agent.store_transition(ob, a, rew)
-
-        rews.append(rew)
+        if validity:
+            obs.append(ob)  # store the ob at current decision making step
+            acts.append(a)
+            rews.append(rew)
 
         if done:
-
             # loss = agent.learn()
             break
 
@@ -84,23 +83,24 @@ def get_traj(agent, env, episode_max_length):
             # 'loss': loss
             }
 
-def concatenate_all_ob(trajs, pa):
 
+def concatenate_all_ob(trajs, pa):
     timesteps_total = 0
     for i in range(len(trajs)):
-        timesteps_total += len(trajs[i]['reward'])
+        timesteps_total += len(trajs[i]['action'])
 
     all_ob = np.zeros(
-        (timesteps_total, pa.network_input_height*pa.network_input_width),
+        (timesteps_total, pa.network_input_height, pa.network_input_width, 1),
         dtype=np.float64)
 
     timesteps = 0
     for i in range(len(trajs)):
-        for j in range(len(trajs[i]['reward'])):
+        for j in range(len(trajs[i]['action'])):
             all_ob[timesteps, :] = trajs[i]['ob'][j]
             timesteps += 1
 
     return all_ob
+
 
 def process_all_info(trajs):
     enter_time = []
@@ -119,8 +119,28 @@ def process_all_info(trajs):
     return enter_time, finish_time, job_len
 
 
-def plot_lr_curve(output_file_prefix, max_rew_lr_curve, mean_rew_lr_curve, slow_down_lr_curve,
-                  ref_discount_rews, ref_slow_down):
+def plot_lr_curve(output_file_prefix, mean_maxspan_lr_curve, min_maxspan_lr_curve):
+    num_colors = 2
+    cm = plt.get_cmap('gist_rainbow')
+
+    fig = plt.figure(figsize=(6, 5))
+
+
+    ax = fig.add_subplot(111)
+
+    ax.set_color_cycle([cm(1. * i / num_colors) for i in range(num_colors)])
+
+    ax.plot(mean_maxspan_lr_curve, linewidth=2, label='PG mean')
+    ax.plot(min_maxspan_lr_curve, linewidth=2, label='PG min')
+
+    plt.legend(loc=1)
+    plt.xlabel("Iteration", fontsize=20)
+    plt.ylabel("Maxspan", fontsize=20)
+
+    plt.savefig(output_file_prefix + "_lr_curve" + ".pdf")
+
+
+def plot_test_lr_curve(output_file_prefix, slow_down_lr_curve, ref_discount_rews, ref_slow_down):
     num_colors = len(ref_discount_rews) + 2
     cm = plt.get_cmap('gist_rainbow')
 
@@ -129,10 +149,8 @@ def plot_lr_curve(output_file_prefix, max_rew_lr_curve, mean_rew_lr_curve, slow_
     ax = fig.add_subplot(121)
     ax.set_color_cycle([cm(1. * i / num_colors) for i in range(num_colors)])
 
-    ax.plot(mean_rew_lr_curve, linewidth=2, label='PG mean')
     for k in ref_discount_rews:
-        ax.plot(np.tile(np.average(ref_discount_rews[k]), len(mean_rew_lr_curve)), linewidth=2, label=k)
-    ax.plot(max_rew_lr_curve, linewidth=2, label='PG max')
+        ax.plot(np.tile(np.average(ref_discount_rews[k]), len(slow_down_lr_curve)), linewidth=2, label=k)
 
     plt.legend(loc=4)
     plt.xlabel("Iteration", fontsize=20)
@@ -141,7 +159,6 @@ def plot_lr_curve(output_file_prefix, max_rew_lr_curve, mean_rew_lr_curve, slow_
     ax = fig.add_subplot(122)
     ax.set_color_cycle([cm(1. * i / num_colors) for i in range(num_colors)])
 
-    ax.plot(slow_down_lr_curve, linewidth=2, label='PG mean')
     for k in ref_discount_rews:
         ax.plot(np.tile(np.average(np.concatenate(ref_slow_down[k])), len(slow_down_lr_curve)), linewidth=2, label=k)
 
@@ -149,15 +166,15 @@ def plot_lr_curve(output_file_prefix, max_rew_lr_curve, mean_rew_lr_curve, slow_
     plt.xlabel("Iteration", fontsize=20)
     plt.ylabel("Slowdown", fontsize=20)
 
-    plt.savefig(output_file_prefix + "_lr_curve" + ".pdf")
+    plt.savefig(output_file_prefix + "_lr_curve_test" + ".pdf")
 
 
 def get_traj_worker(rl, env, pa):
-
     trajs = []
 
-    for i in range(pa.num_seq_per_batch):# 跑完batch个序列，但是是一个个跑的
-        traj = get_traj(rl, env, pa.episode_max_length)
+    for i in range(pa.num_seq_per_batch):
+        # 使用1个env进行num_seq_per_batch次episode_max_length的探索
+        traj = get_traj(rl, env)
         trajs.append(traj)
 
     all_ob = concatenate_all_ob(trajs, pa)
@@ -182,38 +199,34 @@ def get_traj_worker(rl, env, pa):
     # All Job Stat
     enter_time, finish_time, job_len = process_all_info(trajs)
     finished_idx = (finish_time >= 0)
-    all_slowdown = (finish_time[finished_idx] - enter_time[finished_idx]) / job_len[finished_idx]
+    all_slowdown = (finish_time[finished_idx] - enter_time[finished_idx])
 
     return all_eprews, all_eplens, all_slowdown, all_ob, all_action, all_adv
 
 
 def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
-
     # ----------------------------
     print("Preparing for workers...")
     # ----------------------------
 
+    ins_machine_table, ins_time_table = job_distribution.read_excel_instance(6, 6)
+
     pg_learners = []
     envs = []
-    # 任务初始化，得到时长数组和占用资源宽度的数组
-    nw_len_seqs, nw_size_seqs = job_distribution.generate_sequence_work(pa, seed=42)
+
+    nw_mach_table, nw_time_table = job_distribution.generate_sequence_work(pa, seed=42)
 
     for ex in range(pa.num_ex):
-
         print("-prepare for env-", ex)
 
-        env = environment.Env(pa, nw_len_seqs=nw_len_seqs, nw_size_seqs=nw_size_seqs,
-                              render=render, repre=repre, end=end)
-        env.seq_no = ex  # env对象编号
+        env = environment.Env(pa, machine_table=nw_mach_table, time_table=nw_time_table, render=render, repre=repre,
+                              end=end)
+        env.seq_no = ex
         envs.append(env)
 
     print("-prepare for worker-")
 
-    rl = RL_brain.PolicyGradient(n_actions=pa.network_output_dim,
-                                 #network_input_height=pa.network_input_height,
-                                 #network_input_width=pa.network_input_width,
-                                 n_features=pa.network_input_height*pa.network_input_width,
-                                 learning_rate=0.02)
+    rl = RL_brain.PolicyGradient(pa, output_graph=True)
 
     # pg_learner = pg_network.PGLearner(pa)
 
@@ -233,11 +246,17 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
     print("Preparing for reference data...")
     # --------------------------------------
 
-    ref_discount_rews, ref_slow_down = slow_down_cdf.launch(pa, pg_resume=None, render=render,
-                                                            plot=False, repre=repre, end=end)
-    mean_rew_lr_curve = []
-    max_rew_lr_curve = []
-    slow_down_lr_curve = []
+    ref_discount_rews, ref_slow_down,_ = slow_down_cdf.launch(pa, pg_resume=None, render=False, plot=False, repre=repre,
+                                                            end=end)
+    mean_rew_lr_curve = [[] for i in range(pa.num_ex)]
+    max_rew_lr_curve = [[] for i in range(pa.num_ex)]
+    slow_down_lr_curve = [[] for i in range(pa.num_ex)]
+
+    test_mean_rew_lr_curve = []
+    test_max_rew_lr_curve = []
+    test_slow_down_lr_curve = []
+    mean_maxspan_lr_curve = []
+    min_maxspan_lr_curve = []
 
     # --------------------------------------
     print("Start training...")
@@ -245,60 +264,60 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
 
     timer_start = time.time()
 
+    numTimesteps = []
+    losslist = []
+    maxRew = []
+    meanRew = []
+    stdRew = []
+    meanMaxspan = []
+    stdMaxspan = []
+
     for iteration in range(1, pa.num_epochs):
 
         ex_indices = list(range(pa.num_ex))
         np.random.shuffle(ex_indices)
 
-        all_eprews = []
-        eprews = []
-        eplens = []
-        all_slowdown = []
+        epmslist=[]
 
         eprewlist = []
-        eplenlist =[]
-        slowdownlist =[]
-        losslist = []
+        eplenlist = []
+        slowdownlist = [[] for i in range(pa.num_ex)]
+        trajs = []
 
         ex_counter = 0
         for ex in range(pa.num_ex):
+
             ex_idx = ex_indices[ex]
-            eprew, eplen, slowdown, all_ob, all_action, all_adv = get_traj_worker(rl, envs[ex_idx], pa)
+
+            eprew, eplen, slowdown, ex_ob, ex_action, ex_adv = get_traj_worker(rl, envs[ex_idx], pa)
+            traj_ex = {'adv': np.asarray(ex_adv), 'ob': np.asarray(ex_ob), 'action': np.asarray(ex_action)}
+            trajs.append(traj_ex)
+
+            all_ob = concatenate_all_ob(trajs, pa)
+            all_adv = np.concatenate([traj["adv"] for traj in trajs])
+            all_action = np.concatenate([traj["action"] for traj in trajs])
             eprewlist.append(eprew)
             eplenlist.append(eplen)
-            slowdownlist.append(slowdown)
-            loss = rl.learn(all_ob, all_action, all_adv)
-            losslist.append(loss)
+
+            if len(slowdown) != 0:
+                slowdownlist[ex].append(slowdown)
 
             ex_counter += 1
 
-            if ex_counter >= pa.batch_size or ex == pa.num_ex - 1:
+            max_rew_lr_curve[ex].append(np.average([np.max(rew) for rew in eprewlist[ex]]))
 
-                print("\n\n")
+            mean_rew_lr_curve[ex].append(np.mean(eprewlist[ex]))
 
-                ex_counter = 0
+            slow_down_lr_curve[ex].append(np.mean([np.mean(sd) for sd in slowdownlist[ex]]))
 
-                # all_eprews.extend([r["all_eprews"] for r in result])
-
-                # eprews.extend(np.concatenate([r["all_eprews"] for r in result]))  # episode total rewards
-                # eplens.extend(np.concatenate([r["all_eplens"] for r in result]))  # episode lengths
-
-                # all_slowdown.extend(np.concatenate([r["all_slowdown"] for r in result]))
-
-                # assemble gradients
-                # grads = grads_all[0]
-                # for i in range(1, len(grads_all)):
-                # for j in range(len(grads)):
-                # grads[j] += grads_all[i][j]
-
-                # propagate network parameters to others
-                # params = pg_learners[pa.batch_size].get_params()
-
-                # rmsprop_updates_outside(grads, params, accums, pa.lr_rate, pa.rms_rho, pa.rms_eps)
-
-                # for i in range(pa.batch_size + 1):
-                # pg_learners[i].set_net_params(params)
-
+        index = [i for i in range(len(all_ob))]
+        batch_num = int(math.ceil(len(all_ob) / pa.batch_size))
+        loss = []
+        for i in range(batch_num):
+            np.random.shuffle(index)
+            loss.append(rl.learn(all_ob[index[:pa.batch_size]], all_action[index[:pa.batch_size]],
+                                 all_adv[index[:pa.batch_size]]) / batch_num)
+        losslist.append(np.mean(loss))
 
         timer_end = time.time()
 
@@ -307,62 +326,80 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
         print("NumTrajs: \t %i" % len(eprewlist))
         print("NumTimesteps: \t %i" % np.sum(eplenlist))
         print("Loss:     \t %s" % np.mean(losslist))
-        print("MaxRew: \t %s" % np.average([np.max(rew) for rew in eprewlist]))
-        print("MeanRew: \t %s +- %s" % (np.mean(eprewlist), np.std(eprewlist)))
-        print("MeanSlowdown: \t %s" % np.mean([np.mean(sd) for sd in slowdownlist]))
-        print("MeanLen: \t %s +- %s" % (np.mean(eplenlist), np.std(eplenlist)))
+        print("1#MaxRew: \t %s" % np.average([np.max(rew) for rew in eprewlist[1]]))
+        print("1#MeanRew: \t %s +- %s" % (np.mean(eprewlist), np.std(eprewlist[1])))
+        print("1#MeanSlowdown: \t %s" % np.mean([np.mean(sd) for sd in slowdownlist[1]]))
+        print("1#MeanLen: \t %s +- %s" % (np.mean(eplenlist), np.std(eplenlist[1])))
         print("Elapsed time\t %s" % (timer_end - timer_start), "seconds")
         print("-----------------")
 
         timer_start = time.time()
 
-        max_rew_lr_curve.append(np.average([np.max(rew) for rew in eprewlist]))
-        mean_rew_lr_curve.append(np.mean(eprewlist))
-        slow_down_lr_curve.append(np.mean([np.mean(sd) for sd in slowdownlist]))
+        #测试10次
+
+        for i in range(10):
+            discount_rews_test, slow_down_test, maxspan = \
+                slow_down_cdf.launch(pa, pa.output_filename + '_' + str(iteration)
+                                     + '.ckpt', render=False, plot=False, repre=repre,
+                                     end=end, machine_table=ins_machine_table,
+                                     time_table=ins_time_table, rl=rl)
+            epmslist.append(maxspan)
+
+        mean_maxspan_lr_curve.append(np.mean(epmslist))
+        min_maxspan_lr_curve.append(np.min(epmslist))
+
 
         if iteration % pa.output_freq == 0:
-
             rl.save_data(pa.output_filename + '_' + str(iteration))
 
             pa.unseen = True
-            # slow_down_cdf.launch(pa, pa.output_filename + '_' + str(iteration) + '.ckpt',
-                                # render=False, plot=True, repre=repre, end=end)
+
+
             pa.unseen = False
+
             # test on unseen examples
 
-            plot_lr_curve(pa.output_filename,
-                          max_rew_lr_curve, mean_rew_lr_curve, slow_down_lr_curve,
-                          ref_discount_rews, ref_slow_down)
+            plot_lr_curve(pa.output_filename, mean_maxspan_lr_curve, min_maxspan_lr_curve)
 
 
 def main():
-
     import parameters
 
     pa = parameters.Parameters()
-
-    pa.simu_len = 50  # 1000
-    pa.num_ex = 50  # 100
-    pa.num_nw = 10
-    pa.num_seq_per_batch = 20
+    pa.target = 'Slowdown'
+    pa.num_epochs = 2001  # 迭代次数
+    pa.simu_len = 6  # 1000
+    pa.time_horizon = 20
+    pa.num_ex = 10  # 100
+    pa.num_nw = 6
+    pa.num_res = 6
+    pa.max_job_len = 10
+    pa.num_seq_per_batch = 16
     pa.output_freq = 50
-    pa.batch_size = 10
+    pa.batch_size = 1024
+    pa.res_slot = 1
+    pa.max_job_size = 1
+    pa.backlog_size = pa.time_horizon
+    pa.episode_max_length = 200  # 2000
+    pa.hold_penalty = pa.hold_penalty
 
     # pa.max_nw_size = 5
     # pa.job_len = 5
     pa.new_job_rate = 0.3
-
-    pa.episode_max_length = 2000  # 2000
+    pa.lr_rate = 0.001
 
     pa.compute_dependent_parameters()
 
     pg_resume = None
-    # pg_resume = 'data/tmp_450.pkl'
+    # pg_resume = 'data/tmp_900.pkl'
 
     render = False
 
-    launch(pa, pg_resume, render, repre='image', end='all_done')
+    launch(pa, pg_resume, render, repre='image', end='no_new_job')
 
 
 if __name__ == '__main__':
     main()
+
+
+#20190412，6*6问题遇到不收敛，step样本采集有筛选。

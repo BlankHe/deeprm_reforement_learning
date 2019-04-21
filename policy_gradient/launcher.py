@@ -50,32 +50,32 @@ def main():
     q_resume = None
     log = None
 
-    render = True
+    render = False
 
     try:
         opts, args = getopt.getopt(
             sys.argv[1:],
             "hi:o:", ["exp_type=",
-                      "num_res=", # number of resources in the system资源的数量
-                      "num_nw=",# maximum allowed number of work in the queue队列中允许的最大工作数量，缓冲区的个数
-                      "simu_len=",# length of the busy cycle that repeats itself自己循环的次数
+                      "num_res=",
+                      "num_nw=",
+                      "simu_len=",
                       "num_ex=",
-                      "num_seq_per_batch=",  # number of sequences to compute baseline计算基线的序列数量
-                      "eps_max_len=", # enforcing an artificial terminal强制结束的长度
-                      "num_epochs=",# number of training epochs训练次数
-                      "time_horizon=", # number of time steps in the graph时间步数显示的长度，即图像显示的纵向长度
-                      "res_slot=",# maximum number of available resource slots缓冲区的最大可使用资源数量，就是sort的宽度
-                      "max_job_len=", # maximum duration of new jobs一次加工最长的持续时间
-                      "max_job_size=",# maximum resource request of new work一个工作的最大资源限制，需求的宽度
-                      "new_job_rate=",# lambda in new job arrival Poisson Process泊松过程的参数lambda
-                      "dist=",# discount factor折扣因子
-                      "lr_rate=", #learning rate
-                      "--ba_size=", #batch size好像没啥用
+                      "num_seq_per_batch=",
+                      "eps_max_len=",
+                      "num_epochs=",
+                      "time_horizon=",
+                      "res_slot=",
+                      "max_job_len=",
+                      "max_job_size=",
+                      "new_job_rate=",
+                      "dist=",
+                      "lr_rate=",
+                      "ba_size=",
                       "pg_re=",
                       "v_re=",
                       "q_re=",
-                      "out_freq=",  # interval for output and store parameters输出和存储参数的区间
-                      "ofile=",# output file
+                      "out_freq=",
+                      "ofile=",
                       "log=",
                       "render=",
                       "unseen="])
@@ -139,36 +139,6 @@ def main():
         else:
             script_usage()
             sys.exit()
-
-    # initialize parameters by manual
-    pa.num_epochs = 5  # number of training epochs训练次数
-    pa.simu_len = 3  # length of the busy cycle that repeats itself自己循环的次数
-    pa.num_ex = 3  # number of sequences序列的数量，每个序列跑num_seq_per_batch次
-
-    pa.output_freq = 50  # interval for output and store parameters输出和存储参数的区间
-
-    pa.num_seq_per_batch = 1  # number of sequences to compute baseline计算基线的序列数量
-    pa.episode_max_length = 1000  # enforcing an artificial terminal强制结束的长度
-
-    pa.num_res = 2  # number of resources in the system资源的数量
-    pa.num_nw = 3  # maximum allowed number of work in the queue队列中允许的最大工作数量，缓冲区的个数
-
-    pa.time_horizon = 20  # number of time steps in the graph时间步数显示的长度，即图像显示的纵向长度
-    pa.max_job_len = 3  # maximum duration of new jobs一次加工最长的持续时间
-    pa.res_slot = 10  # maximum number of available resource slots缓冲区的最大可使用资源数量，就是sort的宽度
-    pa.max_job_size = 10  # maximum resource request of new work一个工作的最大资源限制，需求的宽度
-
-    pa.backlog_size = 60  # backlog queue size堆积区的大小
-
-    pa.max_track_since_new = 10  # track how many time steps since last new jobs最大的距离上次到达的任务的时间步数限制
-
-    pa.job_num_cap = 40  # maximum number of distinct colors in current work graph在图像中的颜色数量限制
-
-    pa.new_job_rate = 0.7  # lambda in new job arrival Poisson Process泊松过程的参数lambda
-
-    pa.discount = 1  # discount factor折扣因子
-
-    pa.batch_size = 1
 
     pa.compute_dependent_parameters()
 
