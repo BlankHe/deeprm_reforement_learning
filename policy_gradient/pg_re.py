@@ -370,12 +370,12 @@ def main():
     pa.num_epochs = 2001  # 迭代次数
     pa.simu_len = 6  # 1000
     pa.time_horizon = 20
-    pa.num_ex = 10  # 100
+    pa.num_ex = 24  # 100
     pa.num_nw = 6
     pa.num_res = 6
     pa.max_job_len = 10
     pa.num_seq_per_batch = 16
-    pa.output_freq = 50
+    pa.output_freq = 2
     pa.batch_size = 1024
     pa.res_slot = 1
     pa.max_job_size = 1
@@ -386,7 +386,7 @@ def main():
     # pa.max_nw_size = 5
     # pa.job_len = 5
     pa.new_job_rate = 0.3
-    pa.lr_rate = 0.001
+    pa.lr_rate = 0.01
 
     pa.compute_dependent_parameters()
 
@@ -402,4 +402,4 @@ if __name__ == '__main__':
     main()
 
 
-#20190412，6*6问题遇到不收敛，step样本采集有筛选。
+#  20190412，6*6问题遇到不收敛，step样本采集有筛选。

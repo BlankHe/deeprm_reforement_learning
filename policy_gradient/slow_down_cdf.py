@@ -79,7 +79,8 @@ def launch(pa, pg_resume=None, render=False, plot=False, repre='image',
     if pg_resume is not None:
         test_types = ['PG'] + test_types
 
-    env = environment.Env(pa, render=render, repre=repre, end=end, machine_table=machine_table,time_table=time_table)
+    env = environment.Env(pa, render=render, repre=repre, end=end, machine_table=machine_table, time_table=time_table)
+    np.random.seed(None)
 
     all_discount_rews = {}
     jobs_slow_down = {}
@@ -115,8 +116,8 @@ def launch(pa, pg_resume=None, render=False, plot=False, repre='image',
             print("---------- " + test_type + " -----------")
 
             l = len(info.record)
-            if l == pa.simu_len*pa.num_res:
-                ms = info.record[pa.simu_len*pa.num_res-1].finish_time
+            if l == pa.simu_len * pa.num_res:
+                ms = info.record[pa.simu_len * pa.num_res - 1].finish_time
                 print("Maxspan : \t %s" % (ms))
 
                 if test_type == 'PG':
@@ -158,7 +159,6 @@ def launch(pa, pg_resume=None, render=False, plot=False, repre='image',
             )
 
         env.seq_no = (env.seq_no + 1) % env.pa.num_ex
-
 
     # -- matplotlib colormap no overlap --
     if plot:

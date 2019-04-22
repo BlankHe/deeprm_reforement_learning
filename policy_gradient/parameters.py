@@ -84,3 +84,6 @@ class Parameters:
 
         self.network_output_dim = self.num_nw + 1  # + 1 for void action
 
+class Temp_paremeters:
+    def __init__(self):
+        self.action_history = []

@@ -224,13 +224,17 @@ class Env:
             if new_job.len > 0:  # a new job comes
                 # 先看缓存区是否够用，不够的话放堆积区
                 to_backlog = True
+                empty_slot = []
                 for i in range(self.pa.num_nw):
                     if self.job_slot[m].slot[i] is None:  # put in new visible job slots
-                        self.job_slot[m].slot[i] = new_job
-                        # self.job_record.record[new_job.id] = new_job
-                        to_backlog = False
+                        empty_slot.append(i)
+                if len(empty_slot) > 0:
+                    np.random.shuffle(empty_slot)
+                    slot_idx = empty_slot[0]
+                    self.job_slot[m].slot[slot_idx] = new_job
+                    # self.job_record.record[new_job.id] = new_job
+                    to_backlog = False
 
-                        break
 
                 if to_backlog:
                     if self.job_backlog[m].curr_size < self.pa.backlog_size:
@@ -320,10 +324,17 @@ class Env:
 
                     # dequeue backlog 把backlog里面的释放出来一个放到刚刚被清空的solt里面
                     if self.job_backlog[m].curr_size > 0:
-                        self.job_slot[m].slot[a] = self.job_backlog[m].backlog[0]  # if backlog empty, it will be 0
-                        self.job_backlog[m].backlog[: -1] = self.job_backlog[m].backlog[1:]
-                        self.job_backlog[m].backlog[-1] = None
-                        self.job_backlog[m].curr_size -= 1
+
+                        empty_slot = []
+                        for i in range(self.pa.num_nw):
+                            if self.job_slot[m].slot[i] is None:  # put in new visible job slots
+                                empty_slot.append(i)
+                        if len(empty_slot) > 0:
+                            np.random.shuffle(empty_slot)
+                            slot_idx = empty_slot[0]
+                            self.job_slot[m].slot[slot_idx] = self.job_backlog[m].backlog[0]
+                            self.job_backlog[m].backlog[-1] = None
+                            self.job_backlog[m].curr_size -= 1
 
         status = 'MoveOn'
 
@@ -381,7 +392,6 @@ class Env:
         if self.render:
             self.plot_state()
         return validity, ob, reward, done, info
-
 
     def reset(self):
         self.seq_idx = 0
@@ -657,7 +667,7 @@ def test_image_speed():
     pa.new_job_rate = 0.3
     pa.compute_dependent_parameters()
 
-    env = Env(pa, render=False, repre='image')
+    env = Env(pa, render=True, repre='image')
 
     import other_agents
     import time
