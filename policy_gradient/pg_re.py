@@ -6,6 +6,10 @@ import job_distribution
 import slow_down_cdf
 import RL_brain
 import math
+from multi_thread import MultiThread
+
+from numba import vectorize
+
 
 
 def init_accums(pg_learner):  # in rmsprop
@@ -274,9 +278,6 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
 
     for iteration in range(1, pa.num_epochs):
 
-        ex_indices = list(range(pa.num_ex))
-        np.random.shuffle(ex_indices)
-
         epmslist=[]
 
         eprewlist = []
@@ -285,11 +286,30 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
         trajs = []
 
         ex_counter = 0
+
+        # Build multi threads
+        threads = []
+        for ex in range(pa.num_ex):
+            thread = MultiThread(get_traj_worker, (rl, envs[ex], pa), get_traj_worker.__name__)
+            threads.append(thread)
+
+        curr_time = time.time()
+        # run multi threads
+        for i in range(np.int(pa.num_ex/pa.num_threads)):
+            for ex in range(i*pa.num_threads, (i+1)*pa.num_threads):  # start threads 此处并不会执行线程，而是将任务分发到每个线程，同步线程。等同步完成后再开始执行start方法
+                threads[ex].start()
+            for ex in range(i*pa.num_threads, (i+1)*pa.num_threads):  # jion()方法等待线程完成
+                threads[ex].join()
+            if i == np.int(pa.num_ex/pa.num_threads)-1:
+                for ex in range((i+1)*pa.num_threads, pa.num_ex):  # start threads 此处并不会执行线程，而是将任务分发到每个线程，同步线程。等同步完成后再开始执行start方法
+                    threads[ex].start()
+                for ex in range(i*pa.num_threads, (i+1)*pa.num_threads):  # jion()方法等待线程完成
+                    threads[ex].join()
+
         for ex in range(pa.num_ex):
 
-            ex_idx = ex_indices[ex]
-
-            eprew, eplen, slowdown, ex_ob, ex_action, ex_adv = get_traj_worker(rl, envs[ex_idx], pa)
+            threads[ex].get_result()
+            eprew, eplen, slowdown, ex_ob, ex_action, ex_adv = get_traj_worker(rl, envs[ex], pa)
             traj_ex = {'adv': np.asarray(ex_adv), 'ob': np.asarray(ex_ob), 'action': np.asarray(ex_action)}
             trajs.append(traj_ex)
 
@@ -309,7 +329,8 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
             mean_rew_lr_curve[ex].append(np.mean(eprewlist[ex]))
 
             slow_down_lr_curve[ex].append(np.mean([np.mean(sd) for sd in slowdownlist[ex]]))
-
+        t = time.time()-curr_time
+        print(t)
         index = [i for i in range(len(all_ob))]
         batch_num = int(math.ceil(len(all_ob) / pa.batch_size))
         loss = []
@@ -366,15 +387,16 @@ def main():
     import parameters
 
     pa = parameters.Parameters()
+    pa.num_threads = 1 # thread_num
     pa.target = 'Slowdown'
     pa.num_epochs = 2001  # 迭代次数
     pa.simu_len = 6  # 1000
     pa.time_horizon = 20
-    pa.num_ex = 24  # 100
+    pa.num_ex = 20  # 100
     pa.num_nw = 6
     pa.num_res = 6
     pa.max_job_len = 10
-    pa.num_seq_per_batch = 16
+    pa.num_seq_per_batch = 2
     pa.output_freq = 2
     pa.batch_size = 1024
     pa.res_slot = 1
@@ -403,3 +425,4 @@ if __name__ == '__main__':
 
 
 #  20190412，6*6问题遇到不收敛，step样本采集有筛选。
+#  20190423, 多线程
